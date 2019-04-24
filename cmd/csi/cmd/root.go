@@ -26,6 +26,7 @@ const (
 	metadataBucket = "meta"
 	blobBucket     = "blob"
 	credentialFile = "credential"
+	localFS        = "localfs"
 )
 
 var rootCmd = &cobra.Command{
@@ -42,7 +43,9 @@ var rootCmd = &cobra.Command{
 		}
 		zapConfig.Level = zap.NewAtomicLevelAt(lvl)
 		logger, err = zapConfig.Build()
-
+		if err != nil {
+			log.Fatalln(err)
+		}
 		mounter := mount.New("")
 		config := &csi.Config{
 			Name:          csiOpts.driverName,
@@ -52,6 +55,7 @@ var rootCmd = &cobra.Command{
 			RunNode:       csiOpts.server,
 			Mounter:       mounter,
 			Logger:        logger,
+			LocalFS:       csiOpts.localFS,
 		}
 		metadataStore, err := gcs.New(csiOpts.metadataBucket, csiOpts.credentialFile)
 		if err != nil {
@@ -89,6 +93,7 @@ func init() {
 	addMetadataBucket(rootCmd)
 	addBlobBucket(rootCmd)
 	addCredentialFile(rootCmd)
+	addLocalFS(rootCmd)
 	err = rootCmd.MarkFlagRequired(addNodeID(rootCmd))
 	if err != nil {
 		logger.Error("failed to execute command", zap.Error(err))
@@ -114,6 +119,7 @@ type csiFlags struct {
 	metadataBucket string
 	blobBucket     string
 	credentialFile string
+	localFS        string
 }
 
 var csiOpts csiFlags
@@ -164,5 +170,10 @@ func addBlobBucket(cmd *cobra.Command) string {
 
 func addCredentialFile(cmd *cobra.Command) string {
 	cmd.Flags().StringVar(&csiOpts.credentialFile, credentialFile, "/etc/datamon/creds.json", "Credentials to use when talking to cloud backend")
+	return blobBucket
+}
+
+func addLocalFS(cmd *cobra.Command) string {
+	cmd.Flags().StringVar(&csiOpts.localFS, localFS, "/tmp", "Local filesystem within the pod to use to host bundle data")
 	return blobBucket
 }

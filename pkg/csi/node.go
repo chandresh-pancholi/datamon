@@ -57,7 +57,7 @@ func (n *nodeServer) NodeStageVolume(context context.Context, req *csi.NodeStage
 		n.l.Error("repo not set for volume", zap.String("req", req.String()))
 		return nil, status.Error(codes.InvalidArgument, "datamon repo not set, req="+req.String())
 	}
-	bundle, ok := req.VolumeAttributes["bundle"]
+	bundle, ok := req.VolumeAttributes["hash"]
 	if !ok {
 		n.l.Info("latest commit for main branch", zap.String("repo", repo), zap.String("req", req.String()))
 	}
@@ -65,6 +65,10 @@ func (n *nodeServer) NodeStageVolume(context context.Context, req *csi.NodeStage
 	if err != nil {
 		return nil, err
 	}
+	n.l.Info("Stage volume done",
+		zap.String("volume", req.VolumeId),
+		zap.String("repo", repo),
+		zap.String("bundle", bundle))
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -101,6 +105,7 @@ func (n *nodeServer) prepBundle(repo string, bundle string, volumeId string) err
 			zap.String("repo", repo),
 			zap.String("bundle", bundle))
 	}
+	n.l.Info("Prep Bundle finished")
 	return nil
 }
 
@@ -135,6 +140,10 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	if err != nil {
 		return nil, err
 	}
+	n.l.Info("Publish volume done",
+		zap.String("volume", req.VolumeId),
+		zap.String("repo", downloadedBundle.repo),
+		zap.String("bundle", downloadedBundle.bundleID))
 	return &csi.NodePublishVolumeResponse{}, err
 }
 
@@ -157,9 +166,20 @@ func (n *nodeServer) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (
 }
 
 func (n *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	return nil, nil
+	return &csi.NodeGetInfoResponse{
+		NodeId: n.driver.config.NodeID,
+	}, nil
 }
 
 func (n *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return nil, nil
+	cap := csi.NodeServiceCapability{
+		Type: &csi.NodeServiceCapability_Rpc{
+			Rpc: &csi.NodeServiceCapability_RPC{
+				Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+			},
+		},
+	}
+	return &csi.NodeGetCapabilitiesResponse{
+		Capabilities: []*csi.NodeServiceCapability{&cap},
+	}, nil
 }

@@ -20,9 +20,9 @@ spec:
       containers:
         - name: csi-external-attacher
           imagePullPolicy: Always
-          image: quay.io/k8scsi/csi-attacher:v0.3.0
+          image: quay.io/k8scsi/csi-attacher:v0.4.1
           args:
-            - "--v=4"
+            - "--v=10"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
@@ -32,9 +32,9 @@ spec:
               mountPath: /csi
         - name: csi-external-provisioner
           imagePullPolicy: Always
-          image: gcr.io/onec-co/csi-provisioner:v0.3.1
+          image: gcr.io/onec-co/csi-provisioner:v0.4-canary
           args:
-            - "--v=4"
+            - "--v=10"
             - "--provisioner=com.datamon.csi"
             - "--csi-address=$(ADDRESS)"
           env:

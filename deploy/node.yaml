@@ -18,20 +18,23 @@ spec:
       containers:
         - name: csi-driver-registrar
           imagePullPolicy: Always
-          image: quay.io/k8scsi/driver-registrar:v0.3.0
+          image: quay.io/k8scsi/driver-registrar:v0.4.1
           args:
-            - "--v=5"
+            - "--v=10"
             - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/com.datamon.csi/csi.sock"
           env:
             - name: ADDRESS
-              value: /csi/csi.sock
+              value: /var/lib/kubelet/plugins/com.datamon.csi/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
           volumeMounts:
             - name: plugin-dir
-              mountPath: /csi
+              mountPath: /var/lib/kubelet/plugins/com.datamon.csi/
+            - name: registration-dir
+              mountPath: /registration
         - name: datamon-node-driver
           securityContext:
             privileged: true
@@ -43,6 +46,7 @@ spec:
             - "--server=true"
             - "--log-level=debug"
             - "--credential=/etc/datamon-creds/gcp-storage-admin.json"
+            - "--localfs=/tmp"
           env:
             - name: CSI_ENDPOINT
               value: unix:/csi/csi.sock
@@ -58,10 +62,24 @@ spec:
               mountPropagation: "Bidirectional"
             - name: plugin-dir
               mountPath: /csi
+            - name: device-dir
+              mountPath: /dev
+            - name: udev-rules-etc
+              mountPath: /etc/udev
+            - name: udev-rules-lib
+              mountPath: /lib/udev
+            - name: udev-socket
+              mountPath: /run/udev
+            - name: sys
+              mountPath: /sys
             - name: credentials
               readOnly: true
               mountPath: "/etc/datamon-creds"
       volumes:
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/
+            type: Directory
         - name: kubelet-dir
           hostPath:
             path: /var/lib/kubelet
@@ -70,6 +88,27 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins/com.datamon.csi/
             type: DirectoryOrCreate
+        - name: device-dir
+          hostPath:
+            path: /dev
+            type: Directory
+        # The following mounts are required to trigger host udevadm from container
+        - name: udev-rules-etc
+          hostPath:
+            path: /etc/udev
+            type: Directory
+        - name: udev-rules-lib
+          hostPath:
+            path: /lib/udev
+            type: Directory
+        - name: udev-socket
+          hostPath:
+            path: /run/udev
+            type: Directory
+        - name: sys
+          hostPath:
+            path: /sys
+            type: Directory
         - name: credentials
           secret:
             secretName: gcs-credentials

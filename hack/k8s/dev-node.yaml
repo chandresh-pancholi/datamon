@@ -2,8 +2,9 @@ apiVersion: v1
 kind: Pod
 metadata:
   # This name uniquely identifies the Deployment
-  name: datamon-dev
+  name: datamon-dev-node
 spec:
+  nodeName: gke-onec-dev-platform-pool-bd78fb74-npfm
   containers:
     - name: dev
       image: golang:1.11-alpine
@@ -13,16 +14,15 @@ spec:
         - name: credentials
           readOnly: true
           mountPath: "/etc/datamon-creds"
-        - name: riteshpv2
-          readOnly: true
-          mountPath: "/data"
+        - name: logs
+          mountPath: /logs
   volumes:
     - name: credentials
       secret:
         secretName: gcs-credentials
-    - name: riteshpv2
-      persistentVolumeClaim:
-        claimName: riteshpv2
-        readOnly: true
+    - name: logs
+      hostPath:
+        path: /var/log
+
 
 

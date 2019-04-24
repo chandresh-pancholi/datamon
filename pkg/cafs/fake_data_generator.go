@@ -23,7 +23,7 @@ func GenerateFile(tgt string, size int, leafSize uint32) error {
 		fmt.Printf("Unable to create file:%s, err:%s\n", tgt, err)
 		return err
 	}
-	f.Sync()
+	_ = f.Sync()
 
 	if size <= int(leafSize) { // small single chunk file
 		_, err := f.WriteString(internal.RandStringBytesMaskImprSrc(size))
@@ -48,7 +48,7 @@ func GenerateFile(tgt string, size int, leafSize uint32) error {
 			return err
 		}
 	}
-	f.Sync()
+	_ = f.Sync()
 	return f.Close()
 }
 

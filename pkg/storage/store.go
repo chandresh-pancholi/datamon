@@ -69,7 +69,7 @@ func PipeIO(writer io.Writer, reader io.ReadCloser) (n int64, err error) {
 	errC := make(chan error, 1)
 	go func() {
 		defer pw.Close()
-		_, err := io.Copy(pw, reader)
+		_, err = io.Copy(pw, reader)
 		if err != nil {
 			errC <- err
 		}

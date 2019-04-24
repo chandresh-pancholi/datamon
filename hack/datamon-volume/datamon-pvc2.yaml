@@ -1,0 +1,14 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: riteshdebug
+spec:
+	accessModes:
+		- ReadOnlyMany
+	storageClassName: datamon
+	resources:
+		requests:
+			storage: 1Ti
+	selector:
+		matchLabels:
+			release: "1KYmD7EKH7EtovcUn0wlIX9LeqG"

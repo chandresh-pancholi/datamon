@@ -1,7 +1,7 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: ritesh-test-repo
+  name: thankyoumsau42
 spec:
   accessModes:
     - ReadOnlyMany
@@ -11,4 +11,4 @@ spec:
       storage: 1Ti
   selector:
     matchLabels:
-      release: "1JPb0XKiMJuw4eKkrIfMxbqUWYg"
+      release: "1KYmD7EKH7EtovcUn0wlIX9LeqG"

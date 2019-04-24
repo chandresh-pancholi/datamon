@@ -106,7 +106,7 @@ func (r *chunkReader) WriteTo(writer io.Writer) (n int64, err error) {
 		}
 		i := int64(index) * int64(r.leafSize-truncation)
 		go func(writeAt int64, writer io.WriterAt, key Key, prefix string, cafs storage.Store, wg *sync.WaitGroup) {
-			rdr, err := cafs.Get(context.Background(), key.StringWithPrefix(r.prefix)) // thread safe
+			rdr, err := cafs.Get(context.Background(), key.StringWithPrefix(prefix)) // thread safe
 			if err != nil {
 				errC <- err
 			}

@@ -113,8 +113,8 @@ func setupTests(t *testing.T) func() {
 	os.RemoveAll(destinationDir)
 	ctx := context.Background()
 	exitMocks = new(ExitMocks)
-	log_Fatalf = MakeFatalfMock(exitMocks)
-	log_Fatalln = MakeFatallnMock(exitMocks)
+	logFatalf = MakeFatalfMock(exitMocks)
+	logFatalln = MakeFatallnMock(exitMocks)
 	btag := internal.RandStringBytesMaskImprSrc(15)
 	bucketMeta := "datamontestmeta-" + btag
 	bucketBlob := "datamontestblob-" + btag

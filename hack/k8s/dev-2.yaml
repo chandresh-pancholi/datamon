@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   # This name uniquely identifies the Deployment
-  name: datamon-dev
+  name: datamon-dev-debug
 spec:
   containers:
     - name: dev
@@ -13,16 +13,16 @@ spec:
         - name: credentials
           readOnly: true
           mountPath: "/etc/datamon-creds"
-        - name: riteshpv2
+        - name: thankyoumsau42
           readOnly: true
           mountPath: "/data"
   volumes:
     - name: credentials
       secret:
         secretName: gcs-credentials
-    - name: riteshpv2
+    - name: thankyoumsau42
       persistentVolumeClaim:
-        claimName: riteshpv2
+        claimName: thankyoumsau42
         readOnly: true
 
 

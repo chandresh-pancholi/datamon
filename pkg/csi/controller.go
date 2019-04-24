@@ -40,12 +40,19 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		s.config.driver.config.Logger.Error("Repo not set", zap.String("name", req.Name))
 		return nil, fmt.Errorf("repo not set for req name:%s", req.Name)
 	}
+	hash := req.GetParameters()["release"]
+	if hash == "" {
+		s.config.driver.config.Logger.Error("Release not set", zap.String("name", req.Name))
+		return nil, fmt.Errorf("release not set for req name:%s", req.Name)
+	}
 	rd, err := core.GetRepo(repo, s.config.driver.metadataStore)
 	if err != nil {
 		s.config.driver.config.Logger.Error("requested repo could not be found", zap.Error(err))
 		return nil, fmt.Errorf("requested volume not found. err:" + err.Error())
 	}
 	attrs := make(map[string]string)
+	attrs["repo"] = repo
+	attrs["hash"] = hash
 	attrs["timestamp"] = rd.Timestamp.String()
 	attrs["contributor"] = rd.Contributor.Name
 	attrs["email"] = rd.Contributor.Email
@@ -55,6 +62,8 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		Id:            "repo",
 		Attributes:    attrs,
 	}
+	s.config.driver.config.Logger.Info("Volume created",
+		zap.Strings("attrs", []string{volume.Attributes["repo"], volume.Attributes["hash"]}))
 	return &csi.CreateVolumeResponse{
 		Volume: &volume,
 	}, nil
