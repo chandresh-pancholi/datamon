@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/oneconcern/datamon/pkg/storage/gcs"
+	"github.com/oneconcern/datamon/pkg/dlogger"
 
-	"go.uber.org/zap/zapcore"
+	"github.com/oneconcern/datamon/pkg/storage/gcs"
 
 	"github.com/oneconcern/datamon/pkg/csi"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -34,17 +34,10 @@ var rootCmd = &cobra.Command{
 	Short: "CSI daemon related commands",
 	Long:  "CSI daemons are executed in the K8S context.",
 	Run: func(cmd *cobra.Command, args []string) {
-
-		zapConfig := zap.NewProductionConfig()
-		var lvl zapcore.Level
-		err := lvl.UnmarshalText([]byte(csiOpts.logLevel))
+		var err error
+		logger, err = dlogger.GetLogger(csiOpts.logLevel)
 		if err != nil {
 			log.Fatalln("Failed to set log level:" + err.Error())
-		}
-		zapConfig.Level = zap.NewAtomicLevelAt(lvl)
-		logger, err = zapConfig.Build()
-		if err != nil {
-			log.Fatalln(err)
 		}
 		mounter := mount.New("")
 		config := &csi.Config{

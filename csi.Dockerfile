@@ -27,7 +27,9 @@ RUN upx /stage/usr/bin/datamon-csi
 RUN md5sum /stage/usr/bin/datamon-csi
 
 # Build the dist image
-FROM scratch
+FROM ubuntu:latest
+RUN apt-get update && apt-get install -y --no-install-recommends fuse &&\
+  apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 COPY --from=base /stage /
 ENV ZONEINFO /zoneinfo.zip
 ENTRYPOINT [ "datamon-csi" ]

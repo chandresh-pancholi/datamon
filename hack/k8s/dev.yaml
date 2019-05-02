@@ -22,7 +22,7 @@ spec:
         secretName: gcs-credentials
     - name: riteshpv2
       persistentVolumeClaim:
-        claimName: riteshpv2
+        claimName: thankyoumsau42
         readOnly: true
 
 

@@ -4,7 +4,7 @@ metadata:
   # This name uniquely identifies the Deployment
   name: datamon-dev-node
 spec:
-  nodeName: gke-onec-dev-platform-pool-bd78fb74-npfm
+  nodeName: gke-onec-dev-platform-pool-bd78fb74-362
   containers:
     - name: dev
       image: golang:1.11-alpine

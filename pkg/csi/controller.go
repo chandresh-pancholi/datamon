@@ -59,7 +59,7 @@ func (s *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	attrs["description"] = rd.Description
 	volume := csi.Volume{
 		CapacityBytes: math.MaxInt64,
-		Id:            "repo",
+		Id:            repo + "-" + hash,
 		Attributes:    attrs,
 	}
 	s.config.driver.config.Logger.Info("Volume created",

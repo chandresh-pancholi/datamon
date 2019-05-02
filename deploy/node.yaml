@@ -18,7 +18,7 @@ spec:
       containers:
         - name: csi-driver-registrar
           imagePullPolicy: Always
-          image: quay.io/k8scsi/driver-registrar:v0.4.1
+          image: quay.io/k8scsi/driver-registrar:v0.4.2
           args:
             - "--v=10"
             - "--csi-address=$(ADDRESS)"
@@ -62,16 +62,6 @@ spec:
               mountPropagation: "Bidirectional"
             - name: plugin-dir
               mountPath: /csi
-            - name: device-dir
-              mountPath: /dev
-            - name: udev-rules-etc
-              mountPath: /etc/udev
-            - name: udev-rules-lib
-              mountPath: /lib/udev
-            - name: udev-socket
-              mountPath: /run/udev
-            - name: sys
-              mountPath: /sys
             - name: credentials
               readOnly: true
               mountPath: "/etc/datamon-creds"
@@ -88,27 +78,6 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins/com.datamon.csi/
             type: DirectoryOrCreate
-        - name: device-dir
-          hostPath:
-            path: /dev
-            type: Directory
-        # The following mounts are required to trigger host udevadm from container
-        - name: udev-rules-etc
-          hostPath:
-            path: /etc/udev
-            type: Directory
-        - name: udev-rules-lib
-          hostPath:
-            path: /lib/udev
-            type: Directory
-        - name: udev-socket
-          hostPath:
-            path: /run/udev
-            type: Directory
-        - name: sys
-          hostPath:
-            path: /sys
-            type: Directory
         - name: credentials
           secret:
             secretName: gcs-credentials

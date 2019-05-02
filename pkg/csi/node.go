@@ -2,6 +2,7 @@ package csi
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	"github.com/oneconcern/datamon/pkg/storage/localfs"
@@ -32,7 +33,6 @@ type nodeServer struct {
 	meta      storage.Store
 	blob      storage.Store
 	localFS   string
-	fsMap     map[string]string // map of volume to repo:bundle
 	bundleMap map[string]*downloadedBundle
 	lock      sync.Mutex
 	driver    *Driver
@@ -45,7 +45,6 @@ func newNodeServer(driver *Driver) *nodeServer {
 		meta:      driver.metadataStore,
 		blob:      driver.blobStore,
 		localFS:   driver.config.LocalFS,
-		fsMap:     make(map[string]string),
 		bundleMap: make(map[string]*downloadedBundle),
 		lock:      sync.Mutex{},
 	}
@@ -61,10 +60,7 @@ func (n *nodeServer) NodeStageVolume(context context.Context, req *csi.NodeStage
 	if !ok {
 		n.l.Info("latest commit for main branch", zap.String("repo", repo), zap.String("req", req.String()))
 	}
-	err := n.prepBundle(repo, bundle, req.VolumeId)
-	if err != nil {
-		return nil, err
-	}
+
 	n.l.Info("Stage volume done",
 		zap.String("volume", req.VolumeId),
 		zap.String("repo", repo),
@@ -74,11 +70,14 @@ func (n *nodeServer) NodeStageVolume(context context.Context, req *csi.NodeStage
 
 func (n *nodeServer) prepBundle(repo string, bundle string, volumeId string) error {
 	// Check if the bundle has been downloaded, if not download it.
-	n.lock.Lock()
-	defer n.lock.Unlock()
 	_, ok := n.bundleMap[getDownloadedBundleKey(repo, bundle)]
 	if !ok {
-		localFS := localfs.New(afero.NewBasePathFs(afero.NewOsFs(), getPathToLocalFS(n.localFS, bundle, repo)))
+		path, err := getPathToLocalFS(n.localFS, bundle, repo)
+		if err != nil {
+			n.l.Error("failed to create mount path", zap.Error(err))
+			return err
+		}
+		localFS := localfs.New(afero.NewBasePathFs(afero.NewOsFs(), path))
 		bd := core.NewBDescriptor()
 		b := core.New(bd,
 			core.Repo(repo),
@@ -87,9 +86,12 @@ func (n *nodeServer) prepBundle(repo string, bundle string, volumeId string) err
 			core.ConsumableStore(localFS),
 			core.MetaStore(n.meta),
 		)
-		fs, err := core.NewReadOnlyFS(b)
+		fs, err := core.NewReadOnlyFS(b, n.l)
 		if err != nil {
-			n.l.Error("failed to initialize bundle", zap.String("repo", repo), zap.String("bundle", bundle))
+			n.l.Error("failed to initialize bundle",
+				zap.String("repo", repo),
+				zap.String("bundle", bundle),
+				zap.Error(err))
 			return status.Error(codes.Internal, "failed to initialize repo:bundle "+repo+":"+bundle)
 		}
 		downloadedBundle := downloadedBundle{
@@ -99,6 +101,7 @@ func (n *nodeServer) prepBundle(repo string, bundle string, volumeId string) err
 			refCount: 1,
 			fs:       fs,
 		}
+
 		n.bundleMap[volumeId] = &downloadedBundle
 		n.l.Info("volume ready to be published",
 			zap.String("volumeId", volumeId),
@@ -110,20 +113,20 @@ func (n *nodeServer) prepBundle(repo string, bundle string, volumeId string) err
 }
 
 func (n *nodeServer) NodeUnstageVolume(context.Context, *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "NodeUnstageVolume unsupported")
+	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
-	fsMapKey, ok := n.fsMap[req.VolumeId]
+	downloadedBundle, ok := n.bundleMap[req.VolumeId]
 	if !ok {
 		repo, ok := req.VolumeAttributes["repo"]
 		if !ok {
 			n.l.Error("repo not set for volume", zap.String("req", req.String()))
 			return nil, status.Error(codes.InvalidArgument, "repo not set for volume seen first time")
 		}
-		bundle, ok := req.VolumeAttributes["bundle"]
+		bundle, ok := req.VolumeAttributes["hash"]
 		if !ok {
 			n.l.Info("latest commit for main branch", zap.String("repo", repo), zap.String("req", req.String()))
 		}
@@ -132,31 +135,34 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 			return nil, err
 		}
 	}
-	downloadedBundle, ok := n.bundleMap[fsMapKey]
+	downloadedBundle, ok = n.bundleMap[req.VolumeId]
 	if !ok {
 		return nil, status.Error(codes.Internal, "fsMap missing entry: "+req.String())
 	}
+
 	err := downloadedBundle.fs.MountReadOnly(req.TargetPath)
 	if err != nil {
 		return nil, err
 	}
+
 	n.l.Info("Publish volume done",
 		zap.String("volume", req.VolumeId),
-		zap.String("repo", downloadedBundle.repo),
-		zap.String("bundle", downloadedBundle.bundleID))
-	return &csi.NodePublishVolumeResponse{}, err
+		zap.String("id", downloadedBundle.bundleID))
+	return &csi.NodePublishVolumeResponse{}, nil
 }
 
 func getDownloadedBundleKey(repo string, bundle string) string {
 	return repo + bundle
 }
 
-func getPathToLocalFS(basePath string, repo string, bundle string) string {
-	return basePath + "/" + repo + "/" + bundle
+func getPathToLocalFS(basePath string, repo string, bundle string) (string, error) {
+	path := basePath + "/" + repo + "/" + bundle
+	err := os.MkdirAll(path, 0777)
+	return path, err
 }
 
 func (n *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	return nil, nil
+	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
 func (n *nodeServer) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
