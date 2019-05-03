@@ -87,7 +87,7 @@ jobs:
             echo $GCLOUD_SERVICE_KEY | gcloud auth activate-service-account --key-file=-
             export GOOGLE_APPLICATION_CREDENTIALS=$HOME/extra/appcredentials.json
             $(cd cmd/datamon && go build)
-            gotestsum --junitfile /tmp/test-results/go-test-report.xml ./... -- -race ./...
+            gotestsum --format standard-verbose --junitfile /tmp/test-results/go-test-report.xml ./... -- -race ./...
       - save_cache:
           key: pkg-cache-{{ checksum "go.sum" }}
           paths:
