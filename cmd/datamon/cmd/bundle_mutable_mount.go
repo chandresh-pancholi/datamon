@@ -3,7 +3,9 @@
 package cmd
 
 import (
-	"log"
+//	"log"
+	"fmt"
+
 	"os"
 	"os/signal"
 
@@ -21,6 +23,8 @@ var mutableMountBundleCmd = &cobra.Command{
 	Short: "Create a bundle incrementally with filesystem operations",
 	Long:  "Write directories and files to the mountpoint.  Unmount to discard or send SIGINT to this process to save.",
 	Run: func(cmd *cobra.Command, args []string) {
+
+		fmt.Println("top mutable-mount command")
 
 		DieIfNotDirectory(bundleOptions.DataPath)
 
@@ -53,17 +57,20 @@ var mutableMountBundleCmd = &cobra.Command{
 
 		signalChan := make(chan os.Signal, 1)
 		signal.Notify(signalChan, os.Interrupt)
+
+		fmt.Println("waiting on interrupt")
 		
 		<-signalChan
 
-		log.Println("caught interrupt signal")
+		fmt.Println("caught interrupt signal")
 
 		err = fs.Unmount(bundleOptions.MountPath)
 		if err != nil {
 			logFatalln(err)
 		}
 
-		log.Printf("bundle: %v\n", bundle.BundleID)
+		fmt.Printf("bundle: %v\n", bundle.BundleID)
+
 	},
 }
 

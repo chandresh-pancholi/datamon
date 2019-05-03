@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"os/exec"
+	"fmt"
 
 	"github.com/oneconcern/datamon/pkg/storage"
 
@@ -126,7 +128,7 @@ func setupTests(t *testing.T) func() {
 	require.NoError(t, err, "couldn't create blob bucket")
 	repoParams.MetadataBucket = bucketMeta
 	repoParams.BlobBucket = bucketBlob
-	createTree()
+	createAllTestUploadTrees(t)
 	cleanup := func() {
 		os.RemoveAll(destinationDir)
 		deleteBucket(ctx, t, client, bucketMeta)
@@ -381,6 +383,9 @@ func listBundles(t *testing.T, repoName string) ([]bundleListEntry, error) {
 	w.Close()
 	//
 	lb, err := ioutil.ReadAll(r)
+
+	fmt.Printf("bundle list lines: %v ", string(lb))
+
 	require.NoError(t, err, "i/o error reading patched log from pipe")
 	bles := make([]bundleListEntry, 0)
 	for _, line := range getDataLogLines(t, string(lb), []string{`Using config file`}) {
@@ -523,7 +528,6 @@ func listBundleFiles(t *testing.T, repoName string, bid string) []bundleFileList
 		"--repo", repoName,
 		"--bundle", bid,
 	}, "get bundle files list", false)
-
 	//
 	os.Stdout = stdout
 	w.Close()
@@ -675,23 +679,144 @@ func TestBundlesDownloadFiles(t *testing.T) {
 	testBundleDownloadFiles(t, testUploadTrees[2], 3)
 }
 
+func TestBundleMount(t *testing.T) {
+	cleanup := setupTests(t)
+	defer cleanup()
+	runCmd(t, []string{"repo",
+		"create",
+		"--description", "testing",
+		"--repo", repo1,
+		"--name", "tests",
+		"--email", "datamon@oneconcern.com",
+	}, "create repo", false)
+	runCmd(t, []string{"bundle",
+		"upload",
+		"--path", dirPathStr(t, testUploadTrees[1][0]),
+		"--message", "read-only mount test bundle",
+		"--repo", repo1,
+	}, "upload bundle in order to test downloading individual files", false)
+	rll, err := listBundles(t, repo1)
+	require.NoError(t, err, "error out of listBundles() test helper")
+	require.Equal(t, 1, len(rll), "bundle count in test repo")
+	pathBackingFs := "/tmp/mmfs"
+	pathToMount := "/tmp/mmp"
+	require.NoError(t, os.Mkdir(pathBackingFs, 0777|os.ModeDir))
+	require.NoError(t, os.Mkdir(pathToMount, 0777|os.ModeDir))
+	defer os.RemoveAll(pathBackingFs)
+	defer os.RemoveAll(pathToMount)
+	cmd := exec.Command(
+		"../datamon",
+		"bundle", "mount",
+		"--repo", repo1,
+		"--bundle", rll[0].hash,
+		"--destination", pathBackingFs,
+		"--mount", pathToMount,
+		"--meta", repoParams.MetadataBucket,
+		"--blob", repoParams.BlobBucket,
+		)
+	require.NoError(t, cmd.Start())
+	time.Sleep(5 * time.Second)
+	for _, file := range testUploadTrees[1] {
+		expected := readTextFile(t, filePathStr(t, file))
+		actual := readTextFile(t, filepath.Join(pathToMount, pathInBundle(file)))
+		require.Equal(t, len(expected), len(actual), "downloaded file '"+pathInBundle(file)+"' size")
+		require.Equal(t, expected, actual, "downloaded file '"+pathInBundle(file)+"' contents")
+	}
+	cmd.Process.Kill()
+	cmd.Wait()
+}
+
+func mutableMountOutputToBundleID(t *testing.T, out string) string {
+	lines := strings.Split(out, "\n")
+	var bundleKVLine string
+	if strings.TrimSpace(lines[len(lines)-1]) == "" {
+		bundleKVLine = lines[len(lines)-2]
+	} else {
+		bundleKVLine = lines[len(lines)-1]
+	}
+	bundleKV := strings.Split(bundleKVLine, ":")
+	require.Equal(t, "bundle", strings.TrimSpace(bundleKV[0]))
+	return strings.TrimSpace(bundleKV[1])
+}
+
+func TestBundleMutableMount(t *testing.T) {
+	cleanup := setupTests(t)
+	defer cleanup()
+	runCmd(t, []string{"repo",
+		"create",
+		"--description", "testing",
+		"--repo", repo1,
+		"--name", "tests",
+		"--email", "datamon@oneconcern.com",
+	}, "create repo", false)
+	pathBackingFs := "/tmp/mmfs"
+	pathToMount := "/tmp/mmp"
+	require.NoError(t, os.Mkdir(pathBackingFs, 0777|os.ModeDir))
+	require.NoError(t, os.Mkdir(pathToMount, 0777|os.ModeDir))
+	defer os.RemoveAll(pathBackingFs)
+	defer os.RemoveAll(pathToMount)
+	rll, err := listBundles(t, repo1)
+	require.NoError(t, err, "error out of listBundles() test helper")
+	require.Equal(t, 0, len(rll), "bundle count in test repo")
+	cmd := exec.Command(
+		"../datamon",
+		"bundle", "mutable-mount",
+		"--repo", repo1,
+		"--destination", pathBackingFs,
+		"--mount", pathToMount,
+		"--meta", repoParams.MetadataBucket,
+		"--blob", repoParams.BlobBucket,
+		)
+	rdr, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+	require.NoError(t, cmd.Start())
+	time.Sleep(1 * time.Second)
+	createTestUploadTree(t, pathToMount, testUploadTrees[1])
+	backingFileInfos, err := ioutil.ReadDir(pathBackingFs)
+	require.NoError(t, err)
+	require.Equal(t, len(testUploadTrees[1]), len(backingFileInfos),
+		"found expected count of files stored by inode")
+	require.NoError(t, cmd.Process.Signal(os.Interrupt))
+	bytes, err := ioutil.ReadAll(rdr)
+	require.NoError(t, err)
+	cmd.Process.Wait()
+	bundleID := mutableMountOutputToBundleID(t, string(bytes))
+	rll, err = listBundles(t, repo1)
+	require.NoError(t, err, "error out of listBundles() test helper")
+	require.Equal(t, 1, len(rll), "bundle count in test repo")
+	t.Logf("bundles list output %v", rll[0])
+	require.Equal(t, bundleID, rll[0].hash)
+}
+
+
 /** untested:
  * - bundle_mount.go
  * - config_generate.go
  */
 
-func createTree() {
+func createAllTestUploadTrees(t *testing.T) {
 	sourceFS := localfs.New(afero.NewBasePathFs(afero.NewOsFs(), sourceData))
 	for _, tree := range testUploadTrees {
-		for _, file := range tree {
-			err := sourceFS.Put(context.Background(),
+		createTestUploadTreeHelper(t, sourceFS, tree, 1)
+	}
+}
+
+func createTestUploadTree(t *testing.T, pathRoot string, tree []uploadTree) {
+	sourceFS := localfs.New(afero.NewBasePathFs(afero.NewOsFs(), pathRoot))
+	createTestUploadTreeHelper(t, sourceFS, tree, 2)
+}
+
+func createTestUploadTreeHelper(t *testing.T, sourceFS storage.Store, tree []uploadTree, rc int) {
+	for _, file := range tree {
+		var err error
+		for i := 0; i < rc; i++ {
+			err = sourceFS.Put(context.Background(),
 				file.path,
 				bytes.NewReader(internal.RandBytesMaskImprSrc(file.size)),
 				storage.IfNotPresent)
-			if err != nil {
-				log.Fatalln(err)
-			}
+			if err == nil { break }
 		}
+		require.NoError(t, err)
 	}
 }
 
